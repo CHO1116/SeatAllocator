@@ -3,12 +3,31 @@ from __future__ import annotations
 import json
 import os
 import random
+import sys
 import tkinter as tk
 from tkinter import filedialog, messagebox, simpledialog, ttk
 from pathlib import Path
 
 APP_NAME = "자리온"
-APP_DIR = Path(os.environ.get("APPDATA", Path.home())) / "JariOn"
+
+
+def _get_app_dir() -> Path:
+    # Windows: %APPDATA%\JariOn
+    if os.name == "nt":
+        return Path(os.environ.get("APPDATA", str(Path.home()))) / "JariOn"
+
+    # macOS: ~/Library/Application Support/JariOn
+    if sys.platform == "darwin":
+        return Path.home() / "Library" / "Application Support" / "JariOn"
+
+    # Linux/Unix: $XDG_CONFIG_HOME/JariOn or ~/.config/JariOn
+    xdg_config_home = os.environ.get("XDG_CONFIG_HOME")
+    if xdg_config_home:
+        return Path(xdg_config_home) / "JariOn"
+    return Path.home() / ".config" / "JariOn"
+
+
+APP_DIR = _get_app_dir()
 CONFIG_PATH = APP_DIR / "settings.json"
 
 COLORS = {
@@ -480,7 +499,7 @@ class SeatAllocatorApp:
             self.animating = False
             self.draw_btn.configure(state="normal", text="✦   다시 배치하기")
             self.settings_btn.configure(state="normal")
-            self.status_var.set("자리 배치 완료!")
+            self.status_var.set("자리 배치 완���!")
             self.hint_var.set("새로운 자리를 확인해 보세요. 지정된 자리는 매번 그대로예요.")
             self._render_seats()
             self._refresh_roster_only()

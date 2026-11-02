@@ -501,7 +501,7 @@ class SeatAllocatorApp:
             self.animating = False
             self.draw_btn.configure(state="normal", text="✦   다시 배치하기")
             self.settings_btn.configure(state="normal")
-            self.status_var.set("자리 배치 완���!")
+            self.status_var.set("자리 배치 완료!")
             self.hint_var.set("새로운 자리를 확인해 보세요. 지정된 자리는 매번 그대로예요.")
             self._render_seats()
             self._refresh_roster_only()

@@ -223,9 +223,69 @@ class SeatAllocatorApp:
         self.roster_tree.tag_configure("assigned", foreground=COLORS["mint_ink"])
         actions = tk.Frame(self.roster_card, bg=COLORS["paper"])
         actions.pack(fill="x", padx=13, pady=12)
-        ttk.Button(actions, text="＋ 이름 입력", style="Secondary.TButton", command=self._add_name_dialog).pack(fill="x", pady=(0, 7))
-        ttk.Button(actions, text="▤  명단 파일 불러오기", style="Secondary.TButton", command=self._import_names).pack(fill="x")
+        self.roster_action_buttons = []
+        add_button = ttk.Button(actions, text="＋ 이름 입력", style="Secondary.TButton", command=self._add_name_dialog)
+        add_button.pack(fill="x", pady=(0, 7))
+        self.roster_action_buttons.append(add_button)
+        edit_delete = tk.Frame(actions, bg=COLORS["paper"])
+        edit_delete.pack(fill="x", pady=(0, 7))
+        for column in range(2):
+            edit_delete.grid_columnconfigure(column, weight=1, uniform="roster-actions")
+        edit_button = ttk.Button(edit_delete, text="이름 수정", style="Small.TButton", command=self._edit_selected_name)
+        edit_button.grid(row=0, column=0, sticky="ew", padx=(0, 4))
+        delete_button = ttk.Button(edit_delete, text="삭제", style="Small.TButton", command=self._delete_selected_name)
+        delete_button.grid(row=0, column=1, sticky="ew", padx=(4, 0))
+        self.roster_action_buttons.extend((edit_button, delete_button))
+        import_button = ttk.Button(actions, text="▤  명단 파일 불러오기", style="Secondary.TButton", command=self._import_names)
+        import_button.pack(fill="x", pady=(0, 7))
+        export_button = ttk.Button(actions, text="↓  명단 TXT로 저장", style="Secondary.TButton", command=self._export_names)
+        export_button.pack(fill="x")
+        self.roster_action_buttons.extend((import_button, export_button))
         tk.Label(self.roster_card, text="TXT 파일 · 한 줄에 한 명", bg=COLORS["paper"], fg=COLORS["muted"], font=("Malgun Gothic", 8)).pack(pady=(0, 12))
+
+    def _set_roster_actions_enabled(self, enabled: bool):
+        state = "normal" if enabled else "disabled"
+        for button in self.roster_action_buttons:
+            button.configure(state=state)
+
+    def _edit_selected_name(self):
+        if self.animating:
+            return
+        selected = self.roster_tree.selection()
+        if not selected:
+            messagebox.showinfo("학생 선택", "먼저 수정할 학생을 선택해 주세요.", parent=self.root)
+            return
+        values = self.roster_tree.item(selected[0], "values")
+        if not values:
+            return
+        old_name = str(values[0])
+        new_name = simpledialog.askstring(
+            "학생 이름 수정", "새 이름을 입력하세요.", initialvalue=old_name, parent=self.root
+        )
+        if new_name is None:
+            return
+        if new_name.strip() == old_name:
+            return
+        if not self._rename_student(old_name, new_name):
+            messagebox.showwarning("이름 확인", "이름이 비어 있거나 이미 명단에 있는 이름이에요.", parent=self.root)
+            return
+        self.hint_var.set(f"{old_name} 학생 이름을 수정했어요.")
+
+    def _delete_selected_name(self):
+        if self.animating:
+            return
+        selected = self.roster_tree.selection()
+        if not selected:
+            messagebox.showinfo("학생 선택", "먼저 삭제할 학생을 선택해 주세요.", parent=self.root)
+            return
+        values = self.roster_tree.item(selected[0], "values")
+        if not values:
+            return
+        name = str(values[0])
+        if not messagebox.askyesno("학생 삭제", f"'{name}' 학생을 명단에서 삭제할까요?", parent=self.root):
+            return
+        if self._delete_student(name):
+            self.hint_var.set(f"{name} 학생을 명단에서 삭제했어요.")
 
     def _refresh_all(self):
         capacity = self.rows * self.cols
@@ -296,14 +356,73 @@ class SeatAllocatorApp:
         except OSError as e:
             messagebox.showerror("파일 열기 실패", str(e), parent=self.root)
 
+    def _export_names(self):
+        path = filedialog.asksaveasfilename(
+            title="학생 명단 저장",
+            defaultextension=".txt",
+            initialfile="학생명단.txt",
+            filetypes=[("텍스트 파일", "*.txt"), ("모든 파일", "*.*")],
+            parent=self.root,
+        )
+        if not path:
+            return
+        try:
+            with Path(path).open("w", encoding="utf-8", newline="\n") as output:
+                if self.names:
+                    output.write("\n".join(self.names) + "\n")
+            self.hint_var.set(f"현재 명단 {len(self.names)}명을 '{Path(path).name}' 파일로 저장했어요.")
+        except OSError as e:
+            messagebox.showerror("명단 저장 실패", str(e), parent=self.root)
+
     def _add_name_dialog(self):
         value = simpledialog.askstring("학생 이름 입력", "추가할 이름을 입력하세요.", parent=self.root)
-        if value and value.strip():
-            name = value.strip()
-            if name not in self.names:
-                self.names.append(name)
-                self._persist()
-                self._refresh_all()
+        if value is None:
+            return
+        name = value.strip()
+        if not name:
+            messagebox.showwarning("이름 확인", "이름을 입력해 주세요.", parent=self.root)
+            return
+        if name in self.names:
+            messagebox.showwarning("이름 확인", "이미 명단에 있는 이름이에요.", parent=self.root)
+            return
+        self.names.append(name)
+        self._persist()
+        self._refresh_all()
+
+    def _rename_student(self, old_name: str, new_name: str) -> bool:
+        new_name = new_name.strip()
+        if old_name not in self.names or not new_name:
+            return False
+        if new_name == old_name:
+            return True
+        if new_name in self.names:
+            return False
+
+        self.names[self.names.index(old_name)] = new_name
+        if old_name in self.fixed:
+            self.fixed[new_name] = self.fixed.pop(old_name)
+        for seat, assigned_name in list(self.seating.items()):
+            if assigned_name == old_name:
+                self.seating[seat] = new_name
+
+        self._persist()
+        self._refresh_all()
+        return True
+
+    def _delete_student(self, name: str) -> bool:
+        if name not in self.names:
+            return False
+
+        self.names.remove(name)
+        self.fixed.pop(name, None)
+        self.seating = {
+            seat: assigned_name
+            for seat, assigned_name in self.seating.items()
+            if assigned_name != name
+        }
+        self._persist()
+        self._refresh_all()
+        return True
 
     def _teacher_settings(self):
         if not self.pin:
@@ -482,6 +601,7 @@ class SeatAllocatorApp:
         self.animation_ticks = 0
         self.draw_btn.configure(state="disabled", text="자리 섞는 중…")
         self.settings_btn.configure(state="disabled")
+        self._set_roster_actions_enabled(False)
         self.status_var.set("두근두근, 자리를 섞고 있어요")
         self.hint_var.set("새로운 이웃을 만날 준비를 해요!")
         self._animate()
@@ -501,6 +621,7 @@ class SeatAllocatorApp:
             self.animating = False
             self.draw_btn.configure(state="normal", text="✦   다시 배치하기")
             self.settings_btn.configure(state="normal")
+            self._set_roster_actions_enabled(True)
             self.status_var.set("자리 배치 완료!")
             self.hint_var.set("새로운 자리를 확인해 보세요. 지정된 자리는 매번 그대로예요.")
             self._render_seats()

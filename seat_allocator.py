@@ -221,27 +221,22 @@ class SeatAllocatorApp:
         self.roster_tree.column("name", anchor="w", width=210)
         self.roster_tree.pack(fill="both", expand=True, padx=12)
         self.roster_tree.tag_configure("assigned", foreground=COLORS["mint_ink"])
+        self.roster_tree.bind("<Double-1>", self._edit_roster_row)
+        self.roster_tree.bind("<Button-3>", self._show_roster_context_menu)
+        self.roster_context_menu = tk.Menu(self.root, tearoff=0)
+        self.roster_context_menu.add_command(label="삭제", command=self._delete_selected_name)
         actions = tk.Frame(self.roster_card, bg=COLORS["paper"])
         actions.pack(fill="x", padx=13, pady=12)
         self.roster_action_buttons = []
         add_button = ttk.Button(actions, text="＋ 이름 입력", style="Secondary.TButton", command=self._add_name_dialog)
         add_button.pack(fill="x", pady=(0, 7))
         self.roster_action_buttons.append(add_button)
-        edit_delete = tk.Frame(actions, bg=COLORS["paper"])
-        edit_delete.pack(fill="x", pady=(0, 7))
-        for column in range(2):
-            edit_delete.grid_columnconfigure(column, weight=1, uniform="roster-actions")
-        edit_button = ttk.Button(edit_delete, text="이름 수정", style="Small.TButton", command=self._edit_selected_name)
-        edit_button.grid(row=0, column=0, sticky="ew", padx=(0, 4))
-        delete_button = ttk.Button(edit_delete, text="삭제", style="Small.TButton", command=self._delete_selected_name)
-        delete_button.grid(row=0, column=1, sticky="ew", padx=(4, 0))
-        self.roster_action_buttons.extend((edit_button, delete_button))
         import_button = ttk.Button(actions, text="▤  명단 파일 불러오기", style="Secondary.TButton", command=self._import_names)
         import_button.pack(fill="x", pady=(0, 7))
         export_button = ttk.Button(actions, text="↓  명단 TXT로 저장", style="Secondary.TButton", command=self._export_names)
         export_button.pack(fill="x")
         self.roster_action_buttons.extend((import_button, export_button))
-        tk.Label(self.roster_card, text="TXT 파일 · 한 줄에 한 명", bg=COLORS["paper"], fg=COLORS["muted"], font=("Malgun Gothic", 8)).pack(pady=(0, 12))
+        tk.Label(self.roster_card, text="더블클릭: 이름 수정 · 우클릭: 삭제\nTXT 파일 · 한 줄에 한 명", bg=COLORS["paper"], fg=COLORS["muted"], font=("Malgun Gothic", 8), justify="left").pack(pady=(0, 12))
 
     def _set_roster_actions_enabled(self, enabled: bool):
         state = "normal" if enabled else "disabled"
@@ -270,6 +265,27 @@ class SeatAllocatorApp:
             messagebox.showwarning("이름 확인", "이름이 비어 있거나 이미 명단에 있는 이름이에요.", parent=self.root)
             return
         self.hint_var.set(f"{old_name} 학생 이름을 수정했어요.")
+
+    def _edit_roster_row(self, event):
+        row_id = self.roster_tree.identify_row(event.y)
+        if not row_id or self.animating:
+            return
+        self.roster_tree.selection_set(row_id)
+        self.roster_tree.focus(row_id)
+        self._edit_selected_name()
+        return "break"
+
+    def _show_roster_context_menu(self, event):
+        row_id = self.roster_tree.identify_row(event.y)
+        if not row_id or self.animating:
+            return
+        self.roster_tree.selection_set(row_id)
+        self.roster_tree.focus(row_id)
+        try:
+            self.roster_context_menu.tk_popup(event.x_root, event.y_root)
+        finally:
+            self.roster_context_menu.grab_release()
+        return "break"
 
     def _delete_selected_name(self):
         if self.animating:

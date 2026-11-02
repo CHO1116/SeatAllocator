@@ -466,25 +466,32 @@ class SeatAllocatorApp:
         win = tk.Toplevel(self.root)
         win.title("교사 전용 설정")
         win.configure(bg=COLORS["bg"])
-        win.geometry("650x590")
+        win.geometry("650x340")
         win.resizable(False, False)
         win.transient(self.root)
         win.grab_set()
         outer = tk.Frame(win, bg=COLORS["bg"], padx=22, pady=20)
         outer.pack(fill="both", expand=True)
         tk.Label(outer, text="교사 전용 설정", bg=COLORS["bg"], fg=COLORS["ink"], font=("Malgun Gothic", 18, "bold")).pack(anchor="w")
-        tk.Label(outer, text="학생 화면에는 설정 내용이 표시되지 않아요. 변경한 내용은 저장하고 닫아야 적용돼요.", bg=COLORS["bg"], fg=COLORS["muted"], font=("Malgun Gothic", 9)).pack(anchor="w", pady=(2, 15))
+        tk.Label(outer, text="미리 지정할 좌석 설정은 기본으로 접혀 있어요.", bg=COLORS["bg"], fg=COLORS["muted"], font=("Malgun Gothic", 9)).pack(anchor="w", pady=(2, 15))
         dims = tk.Frame(outer, bg=COLORS["paper"], padx=15, pady=13, highlightbackground=COLORS["line"], highlightthickness=1)
         dims.pack(fill="x")
         tk.Label(dims, text="책상 배치", bg=COLORS["paper"], fg=COLORS["ink"], font=("Malgun Gothic", 10, "bold")).grid(row=0, column=0, sticky="w")
-        rows_v, cols_v = tk.IntVar(value=self.rows), tk.IntVar(value=self.cols)
+        rows_v, cols_v = tk.StringVar(value=str(self.rows)), tk.StringVar(value=str(self.cols))
         tk.Spinbox(dims, from_=1, to=8, width=5, textvariable=rows_v, font=("Malgun Gothic", 10), relief="solid", bd=1).grid(row=0, column=1, padx=(20, 5))
         tk.Label(dims, text="행 ×", bg=COLORS["paper"], fg=COLORS["muted"]).grid(row=0, column=2)
         tk.Spinbox(dims, from_=1, to=8, width=5, textvariable=cols_v, font=("Malgun Gothic", 10), relief="solid", bd=1).grid(row=0, column=3, padx=5)
         tk.Label(dims, text="열  (각 1~8)", bg=COLORS["paper"], fg=COLORS["muted"]).grid(row=0, column=4, sticky="w")
 
+        fixed_expanded = False
+        fixed_toggle = ttk.Button(
+            outer,
+            text="설정 더보기  >",
+            style="Small.TButton",
+            command=lambda: toggle_fixed_settings(),
+        )
+        fixed_toggle.pack(anchor="w", pady=(9, 0))
         fixed_box = tk.Frame(outer, bg=COLORS["paper"], padx=15, pady=13, highlightbackground=COLORS["line"], highlightthickness=1)
-        fixed_box.pack(fill="both", expand=True, pady=14)
         tk.Label(fixed_box, text="미리 지정할 자리", bg=COLORS["paper"], fg=COLORS["ink"], font=("Malgun Gothic", 10, "bold")).pack(anchor="w")
         tk.Label(fixed_box, text="지정한 학생은 매번 같은 책상에 배정돼요.", bg=COLORS["paper"], fg=COLORS["muted"], font=("Malgun Gothic", 9)).pack(anchor="w", pady=(2, 9))
         list_frame = tk.Frame(fixed_box, bg=COLORS["paper"])
@@ -545,20 +552,52 @@ class SeatAllocatorApp:
         ttk.Button(addrow, text="선택 삭제", style="Small.TButton", command=remove_fixed).pack(side="left", padx=5)
 
         buttons = tk.Frame(outer, bg=COLORS["bg"])
-        buttons.pack(fill="x")
-        def save_and_close():
+        buttons.pack(fill="x", pady=(14, 0))
+
+        def toggle_fixed_settings():
+            nonlocal fixed_expanded
+            fixed_expanded = not fixed_expanded
+            if fixed_expanded:
+                fixed_box.pack(fill="both", expand=True, pady=14, before=buttons)
+                fixed_toggle.configure(text="설정 접기  ^")
+                win.geometry("650x620")
+            else:
+                fixed_box.pack_forget()
+                fixed_toggle.configure(text="설정 더보기  >")
+                win.geometry("650x340")
+
+        def save_settings():
             self.rows = self._bounded(rows_v.get(), 5)
             self.cols = self._bounded(cols_v.get(), 5)
-            self.fixed = working_fixed
+            self.fixed = dict(working_fixed)
             # Keep the configuration intact; fixed seats outside the new layout are ignored until expanded again.
             self.seating = {}
             self._persist()
             self._refresh_all()
+            working_fixed.clear()
+            working_fixed.update(self.fixed)
+            rows_v.set(self.rows)
+            cols_v.set(self.cols)
+            self.hint_var.set("교사 설정을 저장했어요.")
+
+        def close_settings():
+            has_unsaved = (
+                self._bounded(rows_v.get(), self.rows) != self.rows
+                or self._bounded(cols_v.get(), self.cols) != self.cols
+                or working_fixed != self.fixed
+            )
+            if has_unsaved and not messagebox.askyesno(
+                "저장되지 않은 변경",
+                "저장하지 않은 설정을 버리고 닫을까요?",
+                parent=win,
+            ):
+                return
             win.destroy()
-        win.protocol("WM_DELETE_WINDOW", save_and_close)
-        win.bind("<Escape>", lambda _event: win.destroy())
-        ttk.Button(buttons, text="변경 취소", style="Small.TButton", command=win.destroy).pack(side="right", padx=(8, 0))
-        ttk.Button(buttons, text="저장하고 닫기", style="Secondary.TButton", command=save_and_close).pack(side="right")
+
+        win.protocol("WM_DELETE_WINDOW", close_settings)
+        win.bind("<Escape>", lambda _event: close_settings())
+        ttk.Button(buttons, text="닫기", style="Small.TButton", command=close_settings).pack(side="right", padx=(8, 0))
+        ttk.Button(buttons, text="저장", style="Secondary.TButton", command=save_settings).pack(side="right")
         ttk.Button(buttons, text="PIN 변경", style="Small.TButton", command=lambda: self._change_pin(win)).pack(side="left")
 
     def _change_pin(self, parent):

@@ -338,7 +338,7 @@ class SeatAllocatorApp:
         outer = tk.Frame(win, bg=COLORS["bg"], padx=22, pady=20)
         outer.pack(fill="both", expand=True)
         tk.Label(outer, text="교사 전용 설정", bg=COLORS["bg"], fg=COLORS["ink"], font=("Malgun Gothic", 18, "bold")).pack(anchor="w")
-        tk.Label(outer, text="학생 화면에는 설정 내용이 표시되지 않아요.", bg=COLORS["bg"], fg=COLORS["muted"], font=("Malgun Gothic", 9)).pack(anchor="w", pady=(2, 15))
+        tk.Label(outer, text="학생 화면에는 설정 내용이 표시되지 않아요. 변경한 내용은 저장하고 닫아야 적용돼요.", bg=COLORS["bg"], fg=COLORS["muted"], font=("Malgun Gothic", 9)).pack(anchor="w", pady=(2, 15))
         dims = tk.Frame(outer, bg=COLORS["paper"], padx=15, pady=13, highlightbackground=COLORS["line"], highlightthickness=1)
         dims.pack(fill="x")
         tk.Label(dims, text="책상 배치", bg=COLORS["paper"], fg=COLORS["ink"], font=("Malgun Gothic", 10, "bold")).grid(row=0, column=0, sticky="w")
@@ -420,8 +420,10 @@ class SeatAllocatorApp:
             self._persist()
             self._refresh_all()
             win.destroy()
-        ttk.Button(buttons, text="닫기", style="Small.TButton", command=win.destroy).pack(side="right", padx=(8, 0))
-        ttk.Button(buttons, text="저장", style="Secondary.TButton", command=save_and_close).pack(side="right")
+        win.protocol("WM_DELETE_WINDOW", save_and_close)
+        win.bind("<Escape>", lambda _event: win.destroy())
+        ttk.Button(buttons, text="변경 취소", style="Small.TButton", command=win.destroy).pack(side="right", padx=(8, 0))
+        ttk.Button(buttons, text="저장하고 닫기", style="Secondary.TButton", command=save_and_close).pack(side="right")
         ttk.Button(buttons, text="PIN 변경", style="Small.TButton", command=lambda: self._change_pin(win)).pack(side="left")
 
     def _change_pin(self, parent):
